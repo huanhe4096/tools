@@ -14,7 +14,7 @@ def main(
     cursor = conn.cursor()
 
     # Read CSV in chunks and insert into the database
-    chunk_size = 1000 
+    chunk_size = 4096 
     for chunk in tqdm(pd.read_csv(full_fn_csv, chunksize=chunk_size)):
         chunk.to_sql(name=table_name, con=conn, if_exists="append", index=False)
     print('* inserted all records!')
