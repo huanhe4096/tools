@@ -1,7 +1,14 @@
 import sqlite3
-import pandas as pd
-from tqdm import tqdm
 import argparse
+
+try:
+    import pandas as pd
+    from tqdm import tqdm
+except:
+    print("ERROR: 'pandas' or  could not be imported.")
+    print("Please ensure the package is installed (e.g., pip install pandas tqdm).")
+    import sys
+    sys.exit(1)
 
 def main(
     full_fn_csv,
