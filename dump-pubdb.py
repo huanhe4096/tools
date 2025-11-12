@@ -16,6 +16,10 @@ def process_document(doc):
     if 'publication_date' in doc:
         doc['pubdate'] = doc.pop('publication_date')
 
+    # Rename source to journal
+    if 'source' in doc:
+        doc['journal'] = doc.pop('source')
+
     # Convert mesh_terms list to comma-separated string
     if 'mesh_terms' in doc and isinstance(doc['mesh_terms'], list):
         doc['mesh_terms'] = ';'.join(str(term) for term in doc['mesh_terms'])
