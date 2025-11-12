@@ -1,18 +1,32 @@
 import os
 import csv
 from pymongo import MongoClient
+from tqdm import tqdm
 
 def process_document(doc):
     '''
-    Process a single document: convert lists to comma-separated strings.
+    Process a single document: convert lists to comma-separated strings,
+    drop unwanted fields, and escape special characters in abstract.
     '''
+    # Drop full_text and full_text_type fields
+    doc.pop('full_text', None)
+    doc.pop('full_text_type', None)
+
     # Convert mesh_terms list to comma-separated string
     if 'mesh_terms' in doc and isinstance(doc['mesh_terms'], list):
-        doc['mesh_terms'] = ','.join(str(term) for term in doc['mesh_terms'])
+        doc['mesh_terms'] = ';'.join(str(term) for term in doc['mesh_terms'])
 
     # Convert authors list to comma-separated string
     if 'authors' in doc and isinstance(doc['authors'], list):
-        doc['authors'] = ','.join(str(author) for author in doc['authors'])
+        doc['authors'] = ';'.join(str(author) for author in doc['authors'])
+
+    # Convert references list to comma-separated string
+    if 'references' in doc and isinstance(doc['references'], list):
+        doc['references'] = ';'.join(str(ref) for ref in doc['references'])
+
+    # Escape newlines and tabs in abstract
+    if 'abstract' in doc and isinstance(doc['abstract'], str):
+        doc['abstract'] = doc['abstract'].replace('\n', '\\n').replace('\t', '\\t')
 
     return doc
 
@@ -30,19 +44,25 @@ def main(path_out, db_name='pubdb', collection_name='papers', batch_size=10000):
     db = client[db_name][collection_name]
     print(f"* using database: {db_name}, collection: {collection_name}")
 
-    # Create projection to exclude 'raw' and '_id' fields
-    projection = {'raw': 0, '_id': 0}
+    # Create projection to exclude 'raw', '_id', 'full_text', and 'full_text_type' fields
+    projection = {'raw': 0, '_id': 0, 'full_text': 0, 'full_text_type': 0}
+
+    # Get estimated count for progress bar (much faster than count_documents)
+    estimated_total = db.estimated_document_count()
+    print(f'* streaming ~{estimated_total:,} documents in batches of {batch_size}...')
 
     # Get cursor for streaming (excluding 'raw' and '_id' fields)
-    print(f'* streaming documents in batches of {batch_size}...')
     cursor = db.find({}, projection)
 
     # Open file and write in batches
     print(f'* saving to {path_out} ...')
     with open(path_out, 'w', newline='', encoding='utf-8') as f:
         writer = None
-        total_count = 0
         batch = []
+        total_count = 0
+
+        # Initialize progress bar with estimated total
+        pbar = tqdm(total=estimated_total, unit='docs', desc='Saving documents')
 
         for doc in cursor:
             # Process document
@@ -60,7 +80,7 @@ def main(path_out, db_name='pubdb', collection_name='papers', batch_size=10000):
 
                 writer.writerows(batch)
                 total_count += len(batch)
-                print(f'  - wrote {total_count} documents...')
+                pbar.update(len(batch))
                 batch = []
 
         # Write remaining documents
@@ -73,8 +93,11 @@ def main(path_out, db_name='pubdb', collection_name='papers', batch_size=10000):
 
             writer.writerows(batch)
             total_count += len(batch)
+            pbar.update(len(batch))
 
-    print(f"* dumped {total_count} papers to {path_out}")
+        pbar.close()
+
+    print(f"* dumped {total_count:,} papers to {path_out}")
 
 if __name__ == '__main__':
     import argparse
